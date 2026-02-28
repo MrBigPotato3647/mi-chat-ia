@@ -24,10 +24,9 @@ const btnNuevoPersonaje = document.getElementById('btn-nuevo-personaje');
 const btnCerrarModal = document.getElementById('btn-cerrar-modal');
 const formularioCrear = document.getElementById('formulario-crear');
 
-// --- 1. DIBUJAR BURBUJAS DE CHAT (AHORA CON MARKDOWN) ---
+// --- 1. DIBUJAR BURBUJAS DE CHAT ---
 function inyectarMensaje(rol, contenido) {
     const divBurbuja = document.createElement('div');
-    // Le añadimos la clase 'markdown-content' para que tome los estilos de CSS
     divBurbuja.classList.add('max-w-[85%]', 'md:max-w-[75%]', 'p-4', 'rounded-2xl', 'text-sm', 'sm:text-base', 'break-words', 'shadow-sm', 'w-fit', 'markdown-content');
     
     const fila = document.createElement('div');
@@ -44,17 +43,18 @@ function inyectarMensaje(rol, contenido) {
         divBurbuja.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700', 'rounded-bl-sm');
     }
     
-    // LA MAGIA DEL ROL: Transformamos el texto plano a HTML usando marked.js
-    // Si es un error del sistema, lo dejamos en texto normal
     if (rol === 'error') {
         divBurbuja.textContent = contenido;
     } else {
-        divBurbuja.innerHTML = marked.parse(contenido);
+        divBurbuja.innerHTML = contenido ? marked.parse(contenido) : '<span class="animate-pulse">...</span>'; 
     }
     
     fila.appendChild(divBurbuja);
     ventanaChat.appendChild(fila);
     ventanaChat.scrollTop = ventanaChat.scrollHeight; 
+
+    // Retornamos la burbuja para poder inyectarle el texto en vivo después
+    return divBurbuja; 
 }
 
 // --- 2. CARGAR PERSONAJES DESDE SUPABASE ---
@@ -83,7 +83,6 @@ async function seleccionarPersonaje(id, nombre, promptSistema) {
     nombreCabecera.textContent = nombre;
     ventanaChat.innerHTML = ''; 
     
-    // Mostramos el botón de limpiar chat ahora que seleccionamos a alguien
     btnLimpiarChat.classList.remove('hidden');
     
     inputMensaje.disabled = false;
@@ -111,7 +110,7 @@ function mostrarMensajeVacio(texto) {
     ventanaChat.appendChild(msjVacio);
 }
 
-// --- 4. ENVIAR MENSAJE AL BOT ---
+// --- 4. ENVIAR MENSAJE AL BOT (AHORA CON STREAMING) ---
 formularioChat.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textoUsuario = inputMensaje.value.trim();
@@ -123,7 +122,7 @@ formularioChat.addEventListener('submit', async (e) => {
     inputMensaje.value = '';
     inputMensaje.disabled = true;
     btnEnviar.disabled = true;
-    inputMensaje.placeholder = 'La IA está pensando...';
+    inputMensaje.placeholder = 'La IA está escribiendo...';
 
     inyectarMensaje('user', textoUsuario);
 
@@ -161,23 +160,50 @@ formularioChat.addEventListener('submit', async (e) => {
             if (response.status === 504) mensajeError = "⏳ La IA tardó demasiado. Vercel cortó la conexión.";
             if (response.status === 429) mensajeError = "🚦 Servidores saturados. Reintenta en unos segundos.";
             if (response.status === 404) mensajeError = "🚫 Modelo no encontrado en OpenRouter.";
-            if (response.status === 500) mensajeError = "⚠️ Fallo interno en la red de la API.";
             throw new Error(mensajeError);
         }
 
-        const datosIA = await response.json();
+        // --- INICIO DE LA LECTURA EN VIVO (STREAMING) ---
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let textoCompletoIA = "";
         
-        if (!datosIA.choices || datosIA.choices.length === 0) {
-            throw new Error("El modelo devolvió una respuesta vacía.");
+        // Creamos una burbuja vacía que se irá llenando
+        const burbujaEnVivo = inyectarMensaje('assistant', '');
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break; // Si terminó de escribir, salimos del ciclo
+
+            // Decodificamos el pedacito de información que llegó
+            const chunk = decoder.decode(value, { stream: true });
+            const lineas = chunk.split('\n');
+
+            for (const linea of lineas) {
+                if (linea.startsWith('data: ') && !linea.includes('[DONE]')) {
+                    try {
+                        const data = JSON.parse(linea.replace(/^data: /, ''));
+                        if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                            // Añadimos las letras nuevas al texto total
+                            textoCompletoIA += data.choices[0].delta.content;
+                            
+                            // Actualizamos la pantalla al instante usando Markdown
+                            burbujaEnVivo.innerHTML = marked.parse(textoCompletoIA);
+                            ventanaChat.scrollTop = ventanaChat.scrollHeight;
+                        }
+                    } catch (err) {
+                        // Ignoramos fragmentos cortados en medio del viaje
+                    }
+                }
+            }
         }
 
-        const textoIA = datosIA.choices[0].message.content;
-
-        inyectarMensaje('assistant', textoIA);
-
-        await supabase.from('mensajes').insert([
-            { personaje_id: personajeActivoId, rol: 'assistant', contenido: textoIA }
-        ]);
+        // --- FIN DEL STREAMING: Guardamos la respuesta completa en Supabase ---
+        if (textoCompletoIA.trim() !== "") {
+            await supabase.from('mensajes').insert([
+                { personaje_id: personajeActivoId, rol: 'assistant', contenido: textoCompletoIA }
+            ]);
+        }
 
     } catch (error) {
         console.error(error);
@@ -193,27 +219,22 @@ formularioChat.addEventListener('submit', async (e) => {
 // --- 5. EL BOTÓN DE AMNESIA (LIMPIAR CHAT) ---
 btnLimpiarChat.addEventListener('click', async () => {
     if (!personajeActivoId) return;
-
-    // Pedimos confirmación para no borrar la historia por accidente
-    const confirmar = confirm(`¿Estás seguro de que quieres borrar toda la memoria de este chat? Esta acción no se puede deshacer.`);
+    const confirmar = confirm(`¿Estás seguro de que quieres borrar toda la memoria de este chat?`);
     if (!confirmar) return;
 
     try {
-        // Borramos de Supabase todos los mensajes de este personaje en específico
         const { error } = await supabase
             .from('mensajes')
             .delete()
             .eq('personaje_id', personajeActivoId);
 
         if (error) throw error;
-
-        // Limpiamos la pantalla visualmente
         ventanaChat.innerHTML = '';
         mostrarMensajeVacio('Memoria borrada. ¡La historia comienza de nuevo!');
         inputMensaje.focus();
 
     } catch (error) {
-        console.error("Error al limpiar el chat:", error);
+        console.error("Error:", error);
         alert("Ocurrió un error al intentar borrar la memoria.");
     }
 });
@@ -243,12 +264,9 @@ formularioCrear.addEventListener('submit', async (e) => {
         seleccionarPersonaje(data[0].id, data[0].nombre, data[0].prompt_sistema); 
     } else {
         alert("Ocurrió un error al crear el personaje.");
-        console.error(error);
     }
-    
     btnSubmit.disabled = false;
     btnSubmit.textContent = 'Guardar y Chatear';
 });
 
-// --- INICIALIZACIÓN ---
 cargarPersonajes();
