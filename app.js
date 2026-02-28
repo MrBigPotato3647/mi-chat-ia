@@ -17,16 +17,18 @@ const formularioChat = document.getElementById('formulario-chat');
 const btnEnviar = document.getElementById('btn-enviar');
 const nombreCabecera = document.getElementById('nombre-personaje-activo');
 const listaPersonajes = document.getElementById('lista-personajes');
+const btnLimpiarChat = document.getElementById('btn-limpiar-chat');
 
 const modalCrear = document.getElementById('modal-crear');
 const btnNuevoPersonaje = document.getElementById('btn-nuevo-personaje');
 const btnCerrarModal = document.getElementById('btn-cerrar-modal');
 const formularioCrear = document.getElementById('formulario-crear');
 
-// --- 1. DIBUJAR BURBUJAS DE CHAT ---
+// --- 1. DIBUJAR BURBUJAS DE CHAT (AHORA CON MARKDOWN) ---
 function inyectarMensaje(rol, contenido) {
     const divBurbuja = document.createElement('div');
-    divBurbuja.classList.add('max-w-[85%]', 'md:max-w-[75%]', 'p-4', 'rounded-2xl', 'text-sm', 'sm:text-base', 'break-words', 'leading-relaxed', 'shadow-sm', 'w-fit');
+    // Le añadimos la clase 'markdown-content' para que tome los estilos de CSS
+    divBurbuja.classList.add('max-w-[85%]', 'md:max-w-[75%]', 'p-4', 'rounded-2xl', 'text-sm', 'sm:text-base', 'break-words', 'shadow-sm', 'w-fit', 'markdown-content');
     
     const fila = document.createElement('div');
     fila.classList.add('flex', 'w-full');
@@ -35,7 +37,6 @@ function inyectarMensaje(rol, contenido) {
         fila.classList.add('justify-end'); 
         divBurbuja.classList.add('bg-blue-600', 'text-white', 'rounded-br-sm');
     } else if (rol === 'error') {
-        // Nuevo estilo visual para los errores
         fila.classList.add('justify-center', 'my-2'); 
         divBurbuja.classList.add('bg-red-900/50', 'text-red-200', 'border', 'border-red-700', 'text-xs', 'text-center');
     } else {
@@ -43,7 +44,14 @@ function inyectarMensaje(rol, contenido) {
         divBurbuja.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700', 'rounded-bl-sm');
     }
     
-    divBurbuja.textContent = contenido;
+    // LA MAGIA DEL ROL: Transformamos el texto plano a HTML usando marked.js
+    // Si es un error del sistema, lo dejamos en texto normal
+    if (rol === 'error') {
+        divBurbuja.textContent = contenido;
+    } else {
+        divBurbuja.innerHTML = marked.parse(contenido);
+    }
+    
     fila.appendChild(divBurbuja);
     ventanaChat.appendChild(fila);
     ventanaChat.scrollTop = ventanaChat.scrollHeight; 
@@ -75,6 +83,9 @@ async function seleccionarPersonaje(id, nombre, promptSistema) {
     nombreCabecera.textContent = nombre;
     ventanaChat.innerHTML = ''; 
     
+    // Mostramos el botón de limpiar chat ahora que seleccionamos a alguien
+    btnLimpiarChat.classList.remove('hidden');
+    
     inputMensaje.disabled = false;
     btnEnviar.disabled = false;
     inputMensaje.placeholder = `Hablando con ${nombre}...`;
@@ -89,11 +100,15 @@ async function seleccionarPersonaje(id, nombre, promptSistema) {
     if (historial && historial.length > 0) {
         historial.forEach(msg => inyectarMensaje(msg.rol, msg.contenido));
     } else {
-        const msjVacio = document.createElement('p');
-        msjVacio.className = 'text-center text-gray-500 text-sm mt-4 msj-vacio';
-        msjVacio.textContent = 'Aún no hay mensajes. ¡Inicia la conversación!';
-        ventanaChat.appendChild(msjVacio);
+        mostrarMensajeVacio('Aún no hay mensajes. ¡Inicia la conversación!');
     }
+}
+
+function mostrarMensajeVacio(texto) {
+    const msjVacio = document.createElement('p');
+    msjVacio.className = 'text-center text-gray-500 text-sm mt-4 msj-vacio';
+    msjVacio.textContent = texto;
+    ventanaChat.appendChild(msjVacio);
 }
 
 // --- 4. ENVIAR MENSAJE AL BOT ---
@@ -123,7 +138,6 @@ formularioChat.addEventListener('submit', async (e) => {
             .eq('personaje_id', personajeActivoId)
             .order('creado_en', { ascending: true });
 
-        // Filtramos para enviar solo mensajes válidos a la IA (quitamos los errores guardados si hay)
         const historialLimpio = historial.filter(msg => msg.rol === 'user' || msg.rol === 'assistant');
 
         const mensajesParaIA = historialLimpio.map(msg => ({
@@ -142,11 +156,11 @@ formularioChat.addEventListener('submit', async (e) => {
             body: JSON.stringify({ mensajes: mensajesParaIA })
         });
 
-        // --- SISTEMA INTELIGENTE DE ERRORES ---
         if (!response.ok) {
             let mensajeError = `Error desconocido (${response.status})`;
-            if (response.status === 504) mensajeError = "⏳ La IA tardó demasiado y Vercel cortó la conexión. Intenta enviar tu mensaje de nuevo.";
-            if (response.status === 429) mensajeError = "🚦 Los servidores gratuitos de OpenRouter están saturados ahora mismo. Espera unos segundos y reintenta.";
+            if (response.status === 504) mensajeError = "⏳ La IA tardó demasiado. Vercel cortó la conexión.";
+            if (response.status === 429) mensajeError = "🚦 Servidores saturados. Reintenta en unos segundos.";
+            if (response.status === 404) mensajeError = "🚫 Modelo no encontrado en OpenRouter.";
             if (response.status === 500) mensajeError = "⚠️ Fallo interno en la red de la API.";
             throw new Error(mensajeError);
         }
@@ -154,7 +168,7 @@ formularioChat.addEventListener('submit', async (e) => {
         const datosIA = await response.json();
         
         if (!datosIA.choices || datosIA.choices.length === 0) {
-            throw new Error("El modelo de IA devolvió una respuesta vacía.");
+            throw new Error("El modelo devolvió una respuesta vacía.");
         }
 
         const textoIA = datosIA.choices[0].message.content;
@@ -171,12 +185,40 @@ formularioChat.addEventListener('submit', async (e) => {
     } finally {
         inputMensaje.disabled = false;
         btnEnviar.disabled = false;
-        inputMensaje.placeholder = `Escribe tu mensaje aquí...`;
+        inputMensaje.placeholder = `Escribe tu mensaje o acción usando *asteriscos*...`;
         inputMensaje.focus();
     }
 });
 
-// --- 5. CREADOR DE PERSONAJES ---
+// --- 5. EL BOTÓN DE AMNESIA (LIMPIAR CHAT) ---
+btnLimpiarChat.addEventListener('click', async () => {
+    if (!personajeActivoId) return;
+
+    // Pedimos confirmación para no borrar la historia por accidente
+    const confirmar = confirm(`¿Estás seguro de que quieres borrar toda la memoria de este chat? Esta acción no se puede deshacer.`);
+    if (!confirmar) return;
+
+    try {
+        // Borramos de Supabase todos los mensajes de este personaje en específico
+        const { error } = await supabase
+            .from('mensajes')
+            .delete()
+            .eq('personaje_id', personajeActivoId);
+
+        if (error) throw error;
+
+        // Limpiamos la pantalla visualmente
+        ventanaChat.innerHTML = '';
+        mostrarMensajeVacio('Memoria borrada. ¡La historia comienza de nuevo!');
+        inputMensaje.focus();
+
+    } catch (error) {
+        console.error("Error al limpiar el chat:", error);
+        alert("Ocurrió un error al intentar borrar la memoria.");
+    }
+});
+
+// --- 6. CREADOR DE PERSONAJES ---
 btnNuevoPersonaje.addEventListener('click', () => modalCrear.classList.remove('hidden'));
 btnCerrarModal.addEventListener('click', () => modalCrear.classList.add('hidden'));
 
