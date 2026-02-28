@@ -1,20 +1,14 @@
-// Importamos Supabase directamente desde internet (sin instalar nada)
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
+// --- CONFIGURACIÓN DE SUPABASE (Corregida, sin duplicados) ---
 const SUPABASE_URL = 'https://bbnagkmbduzskievwraw.supabase.co'; 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJibmFna21iZHV6c2tpZXZ3cmF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMTkzNTYsImV4cCI6MjA4Nzc5NTM1Nn0.rCPFXzE1hpRtMOBe7OUa1wBHUD6PQseUFyFmo8s9EP0';
-
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-// --- CONFIGURACIÓN DE SUPABASE ---
-const SUPABASE_URL = 'Pega_Aqui_Tu_Project_URL'; 
-const SUPABASE_ANON_KEY = 'Pega_Aqui_Tu_Clave_Anon_Public';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- ESTADO GLOBAL ---
 let personajeActivoId = null;
-let personajeActivoPrompt = ""; // Aquí guardamos las reglas de la IA
+let personajeActivoPrompt = ""; 
 
 // --- REFERENCIAS DEL DOM (HTML) ---
 const ventanaChat = document.getElementById('ventana-chat');
@@ -65,7 +59,6 @@ async function cargarPersonajes() {
         const btn = document.createElement('button');
         btn.className = 'w-full text-left p-3 hover:bg-gray-800 rounded-xl transition-colors text-white font-medium border border-transparent hover:border-gray-700 mb-1';
         btn.textContent = pj.nombre;
-        // Le pasamos el ID, el nombre y el PROMPT a la función
         btn.onclick = () => seleccionarPersonaje(pj.id, pj.nombre, pj.prompt_sistema);
         listaPersonajes.appendChild(btn);
     });
@@ -74,7 +67,7 @@ async function cargarPersonajes() {
 // --- 3. SELECCIONAR PERSONAJE Y CARGAR HISTORIAL ---
 async function seleccionarPersonaje(id, nombre, promptSistema) {
     personajeActivoId = id;
-    personajeActivoPrompt = promptSistema; // Guardamos las reglas del personaje
+    personajeActivoPrompt = promptSistema; 
     nombreCabecera.textContent = nombre;
     ventanaChat.innerHTML = ''; 
     
@@ -131,7 +124,6 @@ formularioChat.addEventListener('submit', async (e) => {
             content: msg.contenido
         }));
 
-        // INYECCIÓN DEL CONTROL MENTAL: Le damos las reglas absolutas a la IA al principio
         mensajesParaIA.unshift({
             role: 'system',
             content: personajeActivoPrompt
@@ -165,7 +157,7 @@ formularioChat.addEventListener('submit', async (e) => {
     }
 });
 
-// --- 5. CREADOR DE PERSONAJES (NUEVO) ---
+// --- 5. CREADOR DE PERSONAJES ---
 btnNuevoPersonaje.addEventListener('click', () => modalCrear.classList.remove('hidden'));
 btnCerrarModal.addEventListener('click', () => modalCrear.classList.add('hidden'));
 
@@ -179,7 +171,6 @@ formularioCrear.addEventListener('submit', async (e) => {
     const desc = document.getElementById('nueva-desc').value.trim();
     const prompt = document.getElementById('nuevo-prompt').value.trim();
 
-    // Guardamos el nuevo personaje en Supabase
     const { data, error } = await supabase.from('personajes').insert([
         { nombre: nombre, descripcion: desc, prompt_sistema: prompt }
     ]).select();
@@ -187,8 +178,8 @@ formularioCrear.addEventListener('submit', async (e) => {
     if (!error && data && data.length > 0) {
         modalCrear.classList.add('hidden');
         formularioCrear.reset();
-        await cargarPersonajes(); // Recargamos la barra lateral
-        seleccionarPersonaje(data[0].id, data[0].nombre, data[0].prompt_sistema); // Empezamos a chatear con él
+        await cargarPersonajes(); 
+        seleccionarPersonaje(data[0].id, data[0].nombre, data[0].prompt_sistema); 
     } else {
         alert("Ocurrió un error al crear el personaje.");
         console.error(error);
