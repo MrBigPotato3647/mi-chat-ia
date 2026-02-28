@@ -8,13 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <style>
-        /* Estilos personalizados para que el rol (Markdown) se vea hermoso */
         .markdown-content p { margin-bottom: 0.5rem; line-height: 1.5; }
         .markdown-content p:last-child { margin-bottom: 0; }
-        .markdown-content em { font-style: italic; color: #cbd5e1; } /* Color más suave para las acciones */
+        .markdown-content em { font-style: italic; color: #cbd5e1; }
         .markdown-content strong { font-weight: 700; color: #ffffff; }
-        
-        /* Ajustes para tus propios mensajes (fondo azul) */
         .bg-blue-600 .markdown-content em { color: #e2e8f0; }
     </style>
 </head>
@@ -33,6 +30,12 @@
 
         <div id="lista-personajes" class="flex-1 overflow-y-auto p-3 space-y-1">
             <p class="text-gray-500 text-sm p-2 text-center">Cargando personajes...</p>
+        </div>
+
+        <div class="p-3 border-t border-gray-800 mt-auto bg-gray-950">
+            <button id="btn-mi-perfil" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 p-2.5 rounded-lg font-medium transition-colors flex justify-center items-center gap-2 shadow-sm border border-gray-700">
+                <span>👤 Mi Identidad (Rol)</span>
+            </button>
         </div>
     </aside>
 
@@ -89,7 +92,28 @@
                 </div>
                 <div class="flex justify-end gap-3 mt-6 pt-2">
                     <button type="button" id="btn-cerrar-modal" class="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg text-white font-medium transition-colors shadow-sm">Guardar y Chatear</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg text-white font-medium transition-colors shadow-sm">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-perfil" class="fixed inset-0 bg-black/80 hidden flex justify-center items-center z-50 backdrop-blur-sm">
+        <div class="bg-gray-900 border border-gray-700 p-6 rounded-2xl w-full max-w-md shadow-2xl mx-4">
+            <h2 class="text-xl font-bold text-white mb-2">Tu Identidad de Rol</h2>
+            <p class="text-gray-400 text-sm mb-4">La IA usará esta información para reconocerte y reaccionar a tu apariencia.</p>
+            <form id="formulario-perfil" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Tu Nombre (En la historia)</label>
+                    <input type="text" id="perfil-nombre" class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg p-2.5 focus:border-blue-500 outline-none transition-colors" placeholder="Ej: Comandante, Clase A, o tu nombre real">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Tu Aspecto y Actitud</label>
+                    <textarea id="perfil-aspecto" rows="4" class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg p-2.5 focus:border-blue-500 outline-none placeholder-gray-500 transition-colors resize-none" placeholder="Ej: Llevo un uniforme de guardia táctico rasgado. Soy sarcástico, valiente y nunca retrocedo en una pelea."></textarea>
+                </div>
+                <div class="flex justify-end gap-3 mt-6 pt-2">
+                    <button type="button" id="btn-cerrar-perfil" class="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-lg text-white font-medium transition-colors shadow-sm">Guardar Identidad</button>
                 </div>
             </form>
         </div>
