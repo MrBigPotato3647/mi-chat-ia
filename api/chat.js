@@ -21,7 +21,7 @@ export default async function handler(req) {
       },
       body: JSON.stringify({
         // Cambiamos a Toppy 7B: 100% gratuito, rapidísimo y sin censura
-        model: 'undi95/toppy-m-7b:free',
+        model: 'openrouter/free',
         messages: mensajes
       })
     });
@@ -43,3 +43,4 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Fallo al conectar con la nube' }), { status: 500 });
   }
 }
+
