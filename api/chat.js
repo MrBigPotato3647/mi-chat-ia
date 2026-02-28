@@ -1,5 +1,5 @@
 export const config = {
-  runtime: 'edge', // Esta línea mágica evita la guillotina de los 10 segundos de arranque
+  runtime: 'edge',
 };
 
 export default async function handler(req) {
@@ -20,15 +20,15 @@ export default async function handler(req) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // Seguimos usando el modelo sin censura
-        model: 'gryphe/mythomax-l2-13b:free',
+        // Cambiamos a Toppy 7B: 100% gratuito, rapidísimo y sin censura
+        model: 'undi95/toppy-m-7b:free',
         messages: mensajes
       })
     });
 
     const data = await openRouterRes.json();
     
-    // Si OpenRouter nos rechaza por estar lleno, pasamos el error exacto
+    // Si OpenRouter nos rechaza, pasamos el error exacto
     if (!openRouterRes.ok) {
         return new Response(JSON.stringify(data), { status: openRouterRes.status });
     }
@@ -43,4 +43,3 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Fallo al conectar con la nube' }), { status: 500 });
   }
 }
-
