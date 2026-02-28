@@ -53,7 +53,6 @@ function inyectarMensaje(rol, contenido) {
     ventanaChat.appendChild(fila);
     ventanaChat.scrollTop = ventanaChat.scrollHeight; 
 
-    // Retornamos la burbuja para poder inyectarle el texto en vivo después
     return divBurbuja; 
 }
 
@@ -110,7 +109,7 @@ function mostrarMensajeVacio(texto) {
     ventanaChat.appendChild(msjVacio);
 }
 
-// --- 4. ENVIAR MENSAJE AL BOT (AHORA CON STREAMING) ---
+// --- 4. ENVIAR MENSAJE AL BOT (STREAMING CORREGIDO CON BUFFER) ---
 formularioChat.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textoUsuario = inputMensaje.value.trim();
@@ -163,36 +162,40 @@ formularioChat.addEventListener('submit', async (e) => {
             throw new Error(mensajeError);
         }
 
-        // --- INICIO DE LA LECTURA EN VIVO (STREAMING) ---
+        // --- INICIO DE LA LECTURA EN VIVO (STREAMING CORREGIDO) ---
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let textoCompletoIA = "";
+        let buffer = ""; // <-- NUESTRO SALVAVIDAS
         
-        // Creamos una burbuja vacía que se irá llenando
         const burbujaEnVivo = inyectarMensaje('assistant', '');
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break; // Si terminó de escribir, salimos del ciclo
+            if (done) break; 
 
-            // Decodificamos el pedacito de información que llegó
-            const chunk = decoder.decode(value, { stream: true });
-            const lineas = chunk.split('\n');
+            // Sumamos lo nuevo que llegó al búfer
+            buffer += decoder.decode(value, { stream: true });
+            const lineas = buffer.split('\n');
+            
+            // Sacamos la última línea del arreglo y la dejamos en el búfer 
+            // (porque casi siempre es un texto incompleto que fue cortado por la red)
+            buffer = lineas.pop(); 
 
             for (const linea of lineas) {
-                if (linea.startsWith('data: ') && !linea.includes('[DONE]')) {
+                const lineaLimpia = linea.trim();
+                
+                if (lineaLimpia.startsWith('data: ') && !lineaLimpia.includes('[DONE]')) {
                     try {
-                        const data = JSON.parse(linea.replace(/^data: /, ''));
+                        const data = JSON.parse(lineaLimpia.replace(/^data: /, ''));
                         if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
-                            // Añadimos las letras nuevas al texto total
                             textoCompletoIA += data.choices[0].delta.content;
-                            
-                            // Actualizamos la pantalla al instante usando Markdown
                             burbujaEnVivo.innerHTML = marked.parse(textoCompletoIA);
                             ventanaChat.scrollTop = ventanaChat.scrollHeight;
                         }
                     } catch (err) {
-                        // Ignoramos fragmentos cortados en medio del viaje
+                        // Si falla, no rompemos nada, el búfer lo arreglará luego
+                        console.warn("Pedazo incompleto ignorado por ahora", err);
                     }
                 }
             }
