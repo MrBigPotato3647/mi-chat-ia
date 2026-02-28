@@ -1,34 +1,45 @@
-export default async function handler(req, res) {
-  // Solo permitimos peticiones POST (enviar mensajes)
+export const config = {
+  runtime: 'edge', // Esta línea mágica evita la guillotina de los 10 segundos de arranque
+};
+
+export default async function handler(req) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método no permitido' });
+    return new Response(JSON.stringify({ error: 'Método no permitido' }), { status: 405 });
   }
 
-  // Recibimos el historial de mensajes que nos mandará nuestro frontend
-  const { mensajes } = req.body; 
-
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const body = await req.json();
+    const mensajes = body.mensajes;
+
+    const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        // Aquí Vercel inyectará tu clave secreta de forma invisible
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://mi-chat-ia.vercel.app', 
+        'HTTP-Referer': 'https://mi-chat-ia.vercel.app',
         'X-Title': 'Plataforma IA',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // Este es el modelo gratuito y "sin filtro" que investigamos
+        // Seguimos usando el modelo sin censura
         model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
         messages: mensajes
       })
     });
 
-    const data = await response.json();
-    res.status(200).json(data);
+    const data = await openRouterRes.json();
     
+    // Si OpenRouter nos rechaza por estar lleno, pasamos el error exacto
+    if (!openRouterRes.ok) {
+        return new Response(JSON.stringify(data), { status: openRouterRes.status });
+    }
+
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
   } catch (error) {
-    console.error("Error al conectar con la IA:", error);
-    res.status(500).json({ error: 'Fallo interno en el servidor de la IA' });
+    console.error("Error interno:", error);
+    return new Response(JSON.stringify({ error: 'Fallo al conectar con la nube' }), { status: 500 });
   }
 }
