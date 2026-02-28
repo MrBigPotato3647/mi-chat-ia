@@ -15,33 +15,96 @@ const inputMensaje = document.getElementById('input-mensaje');
 const formulario = document.getElementById('formulario-chat');
 const btnEnviar = document.getElementById('btn-enviar');
 const nombreCabecera = document.getElementById('nombre-personaje-activo');
+const listaPersonajes = document.getElementById('lista-personajes');
 
-// --- 1. FUNCIÓN PARA DIBUJAR BURBUJAS DE CHAT ---
+// --- 1. DIBUJAR BURBUJAS DE CHAT ---
 function inyectarMensaje(rol, contenido) {
-    const div = document.createElement('div');
-    div.classList.add('max-w-[75%]', 'p-3', 'rounded-2xl', 'text-sm', 'md:text-base');
+    const divBurbuja = document.createElement('div');
+    divBurbuja.classList.add('max-w-[85%]', 'md:max-w-[75%]', 'p-4', 'rounded-2xl', 'text-sm', 'sm:text-base', 'break-words', 'leading-relaxed', 'shadow-sm', 'w-fit');
     
+    // Contenedor extra para alinear a la izquierda o derecha
+    const fila = document.createElement('div');
+    fila.classList.add('flex', 'w-full');
+
     if (rol === 'user') {
-        div.classList.add('bg-blue-600', 'text-white', 'self-end', 'rounded-br-sm');
+        fila.classList.add('justify-end'); // Tu mensaje va a la derecha
+        divBurbuja.classList.add('bg-blue-600', 'text-white', 'rounded-br-sm');
     } else {
-        div.classList.add('bg-gray-700', 'text-gray-100', 'self-start', 'rounded-bl-sm');
+        fila.classList.add('justify-start'); // El mensaje de la IA va a la izquierda
+        divBurbuja.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700', 'rounded-bl-sm');
     }
     
-    div.textContent = contenido;
-    ventanaChat.appendChild(div);
+    divBurbuja.textContent = contenido;
+    fila.appendChild(divBurbuja);
+    ventanaChat.appendChild(fila);
     ventanaChat.scrollTop = ventanaChat.scrollHeight; // Auto-scroll hacia abajo
 }
 
-// --- 2. ENVIAR MENSAJE A LA IA ---
+// --- 2. CARGAR PERSONAJES DESDE SUPABASE ---
+async function cargarPersonajes() {
+    const { data: personajes, error } = await supabase.from('personajes').select('*');
+    listaPersonajes.innerHTML = ''; // Limpiamos el texto de "Cargando..."
+
+    if (error || !personajes || personajes.length === 0) {
+        listaPersonajes.innerHTML = '<p class="text-gray-500 text-sm p-2 text-center">No hay personajes todavía.</p>';
+        return;
+    }
+
+    personajes.forEach(pj => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full text-left p-3 hover:bg-gray-800 rounded-xl transition-colors text-white font-medium border border-transparent hover:border-gray-700 mb-1';
+        btn.textContent = pj.nombre;
+        // Al hacer clic, abrimos el chat de este personaje
+        btn.onclick = () => seleccionarPersonaje(pj.id, pj.nombre);
+        listaPersonajes.appendChild(btn);
+    });
+}
+
+// --- 3. SELECCIONAR PERSONAJE Y CARGAR HISTORIAL ---
+async function seleccionarPersonaje(id, nombre) {
+    personajeActivoId = id;
+    nombreCabecera.textContent = nombre;
+    ventanaChat.innerHTML = ''; // Limpiamos la pantalla
+    
+    // Desbloqueamos el input para que puedas escribir
+    inputMensaje.disabled = false;
+    btnEnviar.disabled = false;
+    inputMensaje.placeholder = `Hablando con ${nombre}...`;
+    inputMensaje.focus();
+
+    // Buscamos si ya tenían mensajes viejos en la base de datos
+    const { data: historial } = await supabase
+        .from('mensajes')
+        .select('*')
+        .eq('personaje_id', id)
+        .order('creado_en', { ascending: true }); // Del más viejo al más nuevo
+
+    if (historial && historial.length > 0) {
+        historial.forEach(msg => inyectarMensaje(msg.rol, msg.contenido));
+    } else {
+        // Mensaje estético si el chat está vacío
+        const msjVacio = document.createElement('p');
+        msjVacio.className = 'text-center text-gray-500 text-sm mt-4 msj-vacio';
+        msjVacio.textContent = 'Aún no hay mensajes. ¡Inicia la conversación!';
+        ventanaChat.appendChild(msjVacio);
+    }
+}
+
+// --- 4. ENVIAR MENSAJE ---
 formulario.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textoUsuario = inputMensaje.value.trim();
     if (!textoUsuario || !personajeActivoId) return;
 
+    // Quitamos el mensaje de "vacío" si es el primer mensaje
+    const msjVacioInfo = ventanaChat.querySelector('.msj-vacio');
+    if (msjVacioInfo) msjVacioInfo.remove();
+
     // Bloqueamos el input mientras la IA "piensa"
     inputMensaje.value = '';
     inputMensaje.disabled = true;
     btnEnviar.disabled = true;
+    inputMensaje.placeholder = 'La IA está escribiendo...';
 
     // Mostramos el mensaje del usuario en pantalla
     inyectarMensaje('user', textoUsuario);
@@ -52,25 +115,27 @@ formulario.addEventListener('submit', async (e) => {
             { personaje_id: personajeActivoId, rol: 'user', contenido: textoUsuario }
         ]);
 
-        // B. Le pedimos a Supabase el historial de esta conversación para darle memoria a la IA
+        // B. Le pedimos a Supabase el historial para darle memoria a la IA
         const { data: historial } = await supabase
             .from('mensajes')
             .select('rol, contenido')
             .eq('personaje_id', personajeActivoId)
-            .order('creado_en', { ascending: true }); // Ordenamos del más viejo al más nuevo
+            .order('creado_en', { ascending: true });
 
-        // Formateamos el historial para que la IA lo entienda
+        // Formateamos el historial para OpenRouter
         const mensajesParaIA = historial.map(msg => ({
             role: msg.rol === 'user' ? 'user' : 'assistant',
             content: msg.contenido
         }));
 
-        // C. Enviamos todo a nuestro archivo secreto en Vercel (el Escudo)
-        const respuesta = await fetch('/api/chat', {
+        // C. Enviamos todo a nuestro archivo secreto en Vercel
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mensajes: mensajesParaIA })
         });
+
+        if (!response.ok) throw new Error('Error al conectar con el servidor proxy de Vercel');
 
         const datosIA = await response.json();
         const textoIA = datosIA.choices[0].message.content;
@@ -85,11 +150,15 @@ formulario.addEventListener('submit', async (e) => {
 
     } catch (error) {
         console.error(error);
-        inyectarMensaje('assistant', "❌ Error de conexión con la red neuronal.");
+        inyectarMensaje('assistant', "❌ Error de conexión. Revisa la consola.");
     } finally {
         // Desbloqueamos el input
         inputMensaje.disabled = false;
         btnEnviar.disabled = false;
+        inputMensaje.placeholder = `Escribe tu mensaje aquí...`;
         inputMensaje.focus();
     }
 });
+
+// Inicialización: Cargamos los personajes al entrar a la página
+cargarPersonajes();
