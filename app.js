@@ -34,6 +34,10 @@ function inyectarMensaje(rol, contenido) {
     if (rol === 'user') {
         fila.classList.add('justify-end'); 
         divBurbuja.classList.add('bg-blue-600', 'text-white', 'rounded-br-sm');
+    } else if (rol === 'error') {
+        // Nuevo estilo visual para los errores
+        fila.classList.add('justify-center', 'my-2'); 
+        divBurbuja.classList.add('bg-red-900/50', 'text-red-200', 'border', 'border-red-700', 'text-xs', 'text-center');
     } else {
         fila.classList.add('justify-start'); 
         divBurbuja.classList.add('bg-gray-800', 'text-gray-100', 'border', 'border-gray-700', 'rounded-bl-sm');
@@ -104,7 +108,7 @@ formularioChat.addEventListener('submit', async (e) => {
     inputMensaje.value = '';
     inputMensaje.disabled = true;
     btnEnviar.disabled = true;
-    inputMensaje.placeholder = 'La IA está escribiendo...';
+    inputMensaje.placeholder = 'La IA está pensando...';
 
     inyectarMensaje('user', textoUsuario);
 
@@ -119,8 +123,11 @@ formularioChat.addEventListener('submit', async (e) => {
             .eq('personaje_id', personajeActivoId)
             .order('creado_en', { ascending: true });
 
-        const mensajesParaIA = historial.map(msg => ({
-            role: msg.rol === 'user' ? 'user' : 'assistant',
+        // Filtramos para enviar solo mensajes válidos a la IA (quitamos los errores guardados si hay)
+        const historialLimpio = historial.filter(msg => msg.rol === 'user' || msg.rol === 'assistant');
+
+        const mensajesParaIA = historialLimpio.map(msg => ({
+            role: msg.rol,
             content: msg.contenido
         }));
 
@@ -135,9 +142,21 @@ formularioChat.addEventListener('submit', async (e) => {
             body: JSON.stringify({ mensajes: mensajesParaIA })
         });
 
-        if (!response.ok) throw new Error('Error al conectar con Vercel');
+        // --- SISTEMA INTELIGENTE DE ERRORES ---
+        if (!response.ok) {
+            let mensajeError = `Error desconocido (${response.status})`;
+            if (response.status === 504) mensajeError = "⏳ La IA tardó demasiado y Vercel cortó la conexión. Intenta enviar tu mensaje de nuevo.";
+            if (response.status === 429) mensajeError = "🚦 Los servidores gratuitos de OpenRouter están saturados ahora mismo. Espera unos segundos y reintenta.";
+            if (response.status === 500) mensajeError = "⚠️ Fallo interno en la red de la API.";
+            throw new Error(mensajeError);
+        }
 
         const datosIA = await response.json();
+        
+        if (!datosIA.choices || datosIA.choices.length === 0) {
+            throw new Error("El modelo de IA devolvió una respuesta vacía.");
+        }
+
         const textoIA = datosIA.choices[0].message.content;
 
         inyectarMensaje('assistant', textoIA);
@@ -148,7 +167,7 @@ formularioChat.addEventListener('submit', async (e) => {
 
     } catch (error) {
         console.error(error);
-        inyectarMensaje('assistant', "❌ Error de conexión. Revisa la consola.");
+        inyectarMensaje('error', `❌ ${error.message}`);
     } finally {
         inputMensaje.disabled = false;
         btnEnviar.disabled = false;
