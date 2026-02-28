@@ -24,6 +24,14 @@ const btnNuevoPersonaje = document.getElementById('btn-nuevo-personaje');
 const btnCerrarModal = document.getElementById('btn-cerrar-modal');
 const formularioCrear = document.getElementById('formulario-crear');
 
+// --- REFERENCIAS NUEVAS: MI PERFIL ---
+const modalPerfil = document.getElementById('modal-perfil');
+const btnMiPerfil = document.getElementById('btn-mi-perfil');
+const btnCerrarPerfil = document.getElementById('btn-cerrar-perfil');
+const formularioPerfil = document.getElementById('formulario-perfil');
+const inputPerfilNombre = document.getElementById('perfil-nombre');
+const inputPerfilAspecto = document.getElementById('perfil-aspecto');
+
 // --- 1. DIBUJAR BURBUJAS DE CHAT ---
 function inyectarMensaje(rol, contenido) {
     const divBurbuja = document.createElement('div');
@@ -109,7 +117,7 @@ function mostrarMensajeVacio(texto) {
     ventanaChat.appendChild(msjVacio);
 }
 
-// --- 4. ENVIAR MENSAJE AL BOT (STREAMING CORREGIDO CON BUFFER) ---
+// --- 4. ENVIAR MENSAJE AL BOT (CON INYECCIÓN DE IDENTIDAD) ---
 formularioChat.addEventListener('submit', async (e) => {
     e.preventDefault();
     const textoUsuario = inputMensaje.value.trim();
@@ -143,9 +151,20 @@ formularioChat.addEventListener('submit', async (e) => {
             content: msg.contenido
         }));
 
+        // --- CONSTRUIMOS EL CEREBRO DE LA IA (PROMPT + TU IDENTIDAD) ---
+        let systemCompleto = personajeActivoPrompt;
+        
+        const miNombre = localStorage.getItem('miNombre');
+        const miAspecto = localStorage.getItem('miAspecto');
+
+        // Si configuraste tu identidad, le damos una orden estricta a la IA para que lo use
+        if (miNombre || miAspecto) {
+            systemCompleto += `\n\n[INFORMACIÓN DEL USUARIO ESTRICTA: El usuario con el que interactúas se llama "${miNombre || 'Usuario'}". Su descripción y actitud es: "${miAspecto || 'Desconocida'}". Debes adaptar tus respuestas a este perfil, reconocerlo por su nombre y reaccionar a su apariencia si es relevante.]`;
+        }
+
         mensajesParaIA.unshift({
             role: 'system',
-            content: personajeActivoPrompt
+            content: systemCompleto
         });
 
         const response = await fetch('/api/chat', {
@@ -162,11 +181,10 @@ formularioChat.addEventListener('submit', async (e) => {
             throw new Error(mensajeError);
         }
 
-        // --- INICIO DE LA LECTURA EN VIVO (STREAMING CORREGIDO) ---
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let textoCompletoIA = "";
-        let buffer = ""; // <-- NUESTRO SALVAVIDAS
+        let buffer = ""; 
         
         const burbujaEnVivo = inyectarMensaje('assistant', '');
 
@@ -174,12 +192,8 @@ formularioChat.addEventListener('submit', async (e) => {
             const { done, value } = await reader.read();
             if (done) break; 
 
-            // Sumamos lo nuevo que llegó al búfer
             buffer += decoder.decode(value, { stream: true });
             const lineas = buffer.split('\n');
-            
-            // Sacamos la última línea del arreglo y la dejamos en el búfer 
-            // (porque casi siempre es un texto incompleto que fue cortado por la red)
             buffer = lineas.pop(); 
 
             for (const linea of lineas) {
@@ -194,14 +208,12 @@ formularioChat.addEventListener('submit', async (e) => {
                             ventanaChat.scrollTop = ventanaChat.scrollHeight;
                         }
                     } catch (err) {
-                        // Si falla, no rompemos nada, el búfer lo arreglará luego
                         console.warn("Pedazo incompleto ignorado por ahora", err);
                     }
                 }
             }
         }
 
-        // --- FIN DEL STREAMING: Guardamos la respuesta completa en Supabase ---
         if (textoCompletoIA.trim() !== "") {
             await supabase.from('mensajes').insert([
                 { personaje_id: personajeActivoId, rol: 'assistant', contenido: textoCompletoIA }
@@ -219,30 +231,24 @@ formularioChat.addEventListener('submit', async (e) => {
     }
 });
 
-// --- 5. EL BOTÓN DE AMNESIA (LIMPIAR CHAT) ---
+// --- 5. BOTONES DE VENTANAS Y LIMPIEZA ---
 btnLimpiarChat.addEventListener('click', async () => {
     if (!personajeActivoId) return;
     const confirmar = confirm(`¿Estás seguro de que quieres borrar toda la memoria de este chat?`);
     if (!confirmar) return;
 
     try {
-        const { error } = await supabase
-            .from('mensajes')
-            .delete()
-            .eq('personaje_id', personajeActivoId);
-
+        const { error } = await supabase.from('mensajes').delete().eq('personaje_id', personajeActivoId);
         if (error) throw error;
         ventanaChat.innerHTML = '';
         mostrarMensajeVacio('Memoria borrada. ¡La historia comienza de nuevo!');
         inputMensaje.focus();
-
     } catch (error) {
-        console.error("Error:", error);
         alert("Ocurrió un error al intentar borrar la memoria.");
     }
 });
 
-// --- 6. CREADOR DE PERSONAJES ---
+// Modal Personajes
 btnNuevoPersonaje.addEventListener('click', () => modalCrear.classList.remove('hidden'));
 btnCerrarModal.addEventListener('click', () => modalCrear.classList.add('hidden'));
 
@@ -269,7 +275,28 @@ formularioCrear.addEventListener('submit', async (e) => {
         alert("Ocurrió un error al crear el personaje.");
     }
     btnSubmit.disabled = false;
-    btnSubmit.textContent = 'Guardar y Chatear';
+    btnSubmit.textContent = 'Guardar';
 });
 
+// --- NUEVO: LÓGICA DE MI PERFIL (IDENTIDAD DE ROL) ---
+btnMiPerfil.addEventListener('click', () => {
+    // Cargamos los datos guardados previamente
+    inputPerfilNombre.value = localStorage.getItem('miNombre') || '';
+    inputPerfilAspecto.value = localStorage.getItem('miAspecto') || '';
+    modalPerfil.classList.remove('hidden');
+});
+
+btnCerrarPerfil.addEventListener('click', () => modalPerfil.classList.add('hidden'));
+
+formularioPerfil.addEventListener('submit', (e) => {
+    e.preventDefault();
+    // Guardamos la identidad en la memoria del navegador
+    localStorage.setItem('miNombre', inputPerfilNombre.value.trim());
+    localStorage.setItem('miAspecto', inputPerfilAspecto.value.trim());
+    
+    modalPerfil.classList.add('hidden');
+    alert("¡Identidad actualizada! En tu próximo mensaje la IA ya sabrá quién eres.");
+});
+
+// --- INICIALIZACIÓN ---
 cargarPersonajes();
