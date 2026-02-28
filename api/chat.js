@@ -15,27 +15,25 @@ export default async function handler(req) {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://mi-chat-ia.vercel.app', // Tu URL
+        'HTTP-Referer': 'https://mi-chat-ia.vercel.app',
         'X-Title': 'Plataforma IA',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // Seguimos con Trinity que te está dando respuestas increíbles
         model: 'arcee-ai/trinity-large-preview:free',
         messages: mensajes,
-        stream: true, // Mantenemos el efecto de máquina de escribir
-        temperature: 0.9, // Hacemos que sea más creativo e impredecible
-        repetition_penalty: 1.15 // El freno: evita que se quede atrapado en un bucle repitiendo frases
+        stream: true,
+        temperature: 0.8, // Un poco más bajo para evitar que se vuelva loco e invente cosas
+        frequency_penalty: 0.7, // Penaliza usar las mismas palabras, rompiendo el bucle del "susurro siniestro"
+        presence_penalty: 0.5 // Obliga a la IA a avanzar la historia y hablar de cosas nuevas
       })
     });
 
-    // Si hay un error de servidor (ej. 429 o 404), pasamos el error a la pantalla
     if (!openRouterRes.ok) {
         const errorData = await openRouterRes.json();
         return new Response(JSON.stringify(errorData), { status: openRouterRes.status });
     }
 
-    // Devolvemos el chorro de datos en vivo (Streaming) a tu página web
     return new Response(openRouterRes.body, {
       status: 200,
       headers: { 
