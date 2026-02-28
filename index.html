@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat IA Sin Filtro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <style>
+        /* Estilos personalizados para que el rol (Markdown) se vea hermoso */
+        .markdown-content p { margin-bottom: 0.5rem; line-height: 1.5; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content em { font-style: italic; color: #cbd5e1; } /* Color más suave para las acciones */
+        .markdown-content strong { font-weight: 700; color: #ffffff; }
+        
+        /* Ajustes para tus propios mensajes (fondo azul) */
+        .bg-blue-600 .markdown-content em { color: #e2e8f0; }
+    </style>
 </head>
 <body class="bg-gray-900 text-gray-100 h-screen w-screen flex font-sans overflow-hidden">
     
@@ -26,8 +38,12 @@
 
     <main class="flex-1 flex flex-col h-full bg-gray-800 relative">
         
-        <header class="px-6 py-4 border-b border-gray-700 bg-gray-900 shadow-sm flex items-center">
+        <header class="px-6 py-4 border-b border-gray-700 bg-gray-900 shadow-sm flex items-center justify-between">
             <h1 id="nombre-personaje-activo" class="text-lg font-semibold text-white">Selecciona un personaje</h1>
+            
+            <button id="btn-limpiar-chat" class="hidden bg-red-900/30 hover:bg-red-800/60 text-red-400 px-4 py-2 rounded-lg transition-colors border border-red-800/50 flex items-center gap-2 text-sm font-medium" title="Borrar toda la memoria de este chat">
+                🗑️ <span class="hidden sm:inline">Limpiar Chat</span>
+            </button>
         </header>
 
         <section id="ventana-chat" class="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
@@ -39,7 +55,7 @@
                     type="text" 
                     id="input-mensaje" 
                     class="flex-1 bg-gray-800 text-white border border-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 disabled:opacity-50 transition-colors"
-                    placeholder="Escribe tu mensaje aquí..."
+                    placeholder="Escribe tu mensaje o acción usando *asteriscos*..."
                     autocomplete="off"
                     disabled
                 >
@@ -69,7 +85,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-400 mb-1">Prompt del Sistema (Reglas y Personalidad)</label>
-                    <textarea id="nuevo-prompt" required rows="5" class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg p-2.5 focus:border-blue-500 outline-none placeholder-gray-500 transition-colors resize-none" placeholder="Ej: Eres un guerrero letal. Hablas con frialdad, no tienes piedad y describes tus ataques con detalle."></textarea>
+                    <textarea id="nuevo-prompt" required rows="5" class="w-full bg-gray-800 text-white border border-gray-600 rounded-lg p-2.5 focus:border-blue-500 outline-none placeholder-gray-500 transition-colors resize-none" placeholder="Ej: Eres un guerrero letal. Hablas con frialdad y narras tus acciones usando *asteriscos*."></textarea>
                 </div>
                 <div class="flex justify-end gap-3 mt-6 pt-2">
                     <button type="button" id="btn-cerrar-modal" class="px-4 py-2 text-gray-400 hover:text-white transition-colors font-medium">Cancelar</button>
