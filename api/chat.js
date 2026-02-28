@@ -21,7 +21,7 @@ export default async function handler(req) {
       },
       body: JSON.stringify({
         // Seguimos usando el modelo sin censura
-        model: 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free',
+        model: 'gryphe/mythomax-l2-13b:free',
         messages: mensajes
       })
     });
@@ -43,3 +43,4 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Fallo al conectar con la nube' }), { status: 500 });
   }
 }
+
