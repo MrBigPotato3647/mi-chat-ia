@@ -1,5 +1,5 @@
 export const config = {
-  runtime: 'edge',
+  runtime: 'edge', 
 };
 
 export default async function handler(req) {
@@ -20,22 +20,26 @@ export default async function handler(req) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        // Cambiamos a Toppy 7B: 100% gratuito, rapidísimo y sin censura
         model: 'arcee-ai/trinity-large-preview:free',
-        messages: mensajes
+        messages: mensajes,
+        stream: true // ¡AQUÍ ESTÁ LA MAGIA! Pedimos que envíe letra por letra
       })
     });
 
-    const data = await openRouterRes.json();
-    
-    // Si OpenRouter nos rechaza, pasamos el error exacto
+    // Si hay un error de saturación o límite, lo enviamos normal
     if (!openRouterRes.ok) {
-        return new Response(JSON.stringify(data), { status: openRouterRes.status });
+        const errorData = await openRouterRes.json();
+        return new Response(JSON.stringify(errorData), { status: openRouterRes.status });
     }
 
-    return new Response(JSON.stringify(data), {
+    // Devolvemos el "chorro" continuo de datos directamente a tu página web
+    return new Response(openRouterRes.body, {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      }
     });
 
   } catch (error) {
@@ -43,5 +47,3 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Fallo al conectar con la nube' }), { status: 500 });
   }
 }
-
-
